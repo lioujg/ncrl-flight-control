@@ -83,9 +83,18 @@ float coeff_cmd_to_thrust[6] = {0.0f};
 float coeff_thrust_to_cmd[6] = {0.0f};
 float motor_thrust_max = 0.0f;
 
+float Total_thrust = 0.0f; /* liu */
+
 autopilot_t autopilot;
+/* add waypoint here?
+ * src/core/controllers/autopilot.c */
 
 bool height_ctrl_only = false;
+
+void get_total_thrust(float *total_thrust)     /* liu */
+{
+       *total_thrust = Total_thrust;
+}
 
 void geometry_ctrl_init(void)
 {
@@ -277,7 +286,7 @@ void geometry_manual_ctrl(euler_t *rc, float *attitude_q, float *gyro, float *ou
 		_kwz = kwz;
 	}
 
-	/* calculate attitude error eR */
+	/* calculate attitude error eR (10)*/
 	MAT_MULT(&Rtd, &R, &RtdR);
 	MAT_MULT(&Rt, &Rd, &RtRd);
 	MAT_SUB(&RtdR, &RtRd, &eR_mat);
@@ -286,7 +295,7 @@ void geometry_manual_ctrl(euler_t *rc, float *attitude_q, float *gyro, float *ou
 	mat_data(eR)[1] *= 0.5f;
 	mat_data(eR)[2] *= 0.5f;
 
-	/* calculate attitude rate error eW */
+	/* calculate attitude rate error eW (11)*/
 	//MAT_MULT(&Rt, &Rd, &RtRd); //the term is duplicated
 	MAT_MULT(&RtRd, &Wd, &RtRdWd);
 	MAT_SUB(&W, &RtRdWd, &eW);
@@ -299,7 +308,7 @@ void geometry_manual_ctrl(euler_t *rc, float *attitude_q, float *gyro, float *ou
 	mat_data(inertia_effect)[1] = mat_data(WJW)[1];
 	mat_data(inertia_effect)[2] = mat_data(WJW)[2];
 
-#if 0   /* inertia feedfoward term for motion planning (trajectory is known) */
+#if 0   /* inertia feedfoward term for motion planning (trajectory is known) (16)*/
 	/* calculate inertia effect (trajectory is defined, Wd and Wd_dot are not zero) */
 	//W * R^T * Rd * Wd
 	hat_map_3x3(mat_data(W), mat_data(W_hat));
@@ -318,7 +327,7 @@ void geometry_manual_ctrl(euler_t *rc, float *attitude_q, float *gyro, float *ou
 
 #endif
 
-	/* control input M1, M2, M3 */
+	/* control input M1, M2, M3 (16)*/
 	output_moments[0] = -krx*mat_data(eR)[0] -kwx*mat_data(eW)[0] + mat_data(inertia_effect)[0];
 	output_moments[1] = -kry*mat_data(eR)[1] -kwy*mat_data(eW)[1] + mat_data(inertia_effect)[1];
 	output_moments[2] = -_krz*mat_data(eR)[2] -_kwz*mat_data(eW)[2] + mat_data(inertia_effect)[2];
@@ -330,7 +339,7 @@ void geometry_tracking_ctrl(euler_t *rc, float *attitude_q, float *gyro, float *
 {
 	/* ex = x - xd */
 	float pos_des_ned[3];
-	assign_vector_3x1_eun_to_ned(pos_des_ned, autopilot.wp_now.pos);
+	assign_vector_3x1_eun_to_ned(pos_des_ned, autopilot.wp_now.pos);	//function is at src/core/controllers/autopilot.c
 	pos_error[0] = curr_pos_ned[0] - pos_des_ned[0];
 	pos_error[1] = curr_pos_ned[1] - pos_des_ned[1];
 	pos_error[2] = curr_pos_ned[2] - pos_des_ned[2];
@@ -358,7 +367,7 @@ void geometry_tracking_ctrl(euler_t *rc, float *attitude_q, float *gyro, float *
 	bound_float(&tracking_error_integral[2], 50, -50);
 
 	mat_data(kxex_kvev_mge3_mxd_dot_dot)[0] = -kpx*pos_error[0] - kvx*vel_error[0] +
-	                force_ff_ned[0] - tracking_error_integral[0];
+	                force_ff_ned[0] - tracking_error_integral[0];	//i control to tracking mge3??
 	mat_data(kxex_kvev_mge3_mxd_dot_dot)[1] = -kpy*pos_error[1] - kvy*vel_error[1] +
 	                force_ff_ned[1] - tracking_error_integral[1];
 	mat_data(kxex_kvev_mge3_mxd_dot_dot)[2] = -kpz*pos_error[2] - kvz*vel_error[2] +
@@ -417,12 +426,12 @@ void geometry_tracking_ctrl(euler_t *rc, float *attitude_q, float *gyro, float *
 	mat_data(Re3)[0] = mat_data(R)[0*3 + 2];
 	mat_data(Re3)[1] = mat_data(R)[1*3 + 2];
 	mat_data(Re3)[2] = mat_data(R)[2*3 + 2];
-	/* f = -(-kx * ex - kv * ev - mge3 + m * x_d_dot_dot) . (R * e3) */
+	/* f = -(-kx * ex - kv * ev - mge3 + m * x_d_dot_dot) . (R * e3) (15)*/
 	float neg_kxex_kvev_mge3_mxd_dot_dot[3];
 	neg_kxex_kvev_mge3_mxd_dot_dot[0] = -mat_data(kxex_kvev_mge3_mxd_dot_dot)[0];
 	neg_kxex_kvev_mge3_mxd_dot_dot[1] = -mat_data(kxex_kvev_mge3_mxd_dot_dot)[1];
 	neg_kxex_kvev_mge3_mxd_dot_dot[2] = -mat_data(kxex_kvev_mge3_mxd_dot_dot)[2];
-	arm_dot_prod_f32(neg_kxex_kvev_mge3_mxd_dot_dot, mat_data(Re3), 3, output_force);
+	arm_dot_prod_f32(neg_kxex_kvev_mge3_mxd_dot_dot, mat_data(Re3), 3, output_force);//pointer??
 
 	/* W (angular velocity) */
 	mat_data(W)[0] = gyro[0];
@@ -437,7 +446,7 @@ void geometry_tracking_ctrl(euler_t *rc, float *attitude_q, float *gyro, float *
 	mat_data(Wd_dot)[1] = 0.0f;
 	mat_data(Wd_dot)[2] = 0.0f;
 
-	/* calculate attitude error eR */
+	/* calculate attitude error eR (10)*/
 	MAT_MULT(&Rtd, &R, &RtdR);
 	MAT_MULT(&Rt, &Rd, &RtRd);
 	MAT_SUB(&RtdR, &RtRd, &eR_mat);
@@ -446,7 +455,7 @@ void geometry_tracking_ctrl(euler_t *rc, float *attitude_q, float *gyro, float *
 	mat_data(eR)[1] *= 0.5f;
 	mat_data(eR)[2] *= 0.5f;
 
-	/* calculate attitude rate error eW */
+	/* calculate attitude rate error eW (11)*/
 	//MAT_MULT(&Rt, &Rd, &RtRd); //the term is duplicated
 	MAT_MULT(&RtRd, &Wd, &RtRdWd);
 	MAT_SUB(&W, &RtRdWd, &eW);
@@ -459,8 +468,8 @@ void geometry_tracking_ctrl(euler_t *rc, float *attitude_q, float *gyro, float *
 	mat_data(inertia_effect)[1] = mat_data(WJW)[1];
 	mat_data(inertia_effect)[2] = mat_data(WJW)[2];
 
-	/* control input M1, M2, M3 */
-	output_moments[0] = -krx*mat_data(eR)[0] -kwx*mat_data(eW)[0] + mat_data(inertia_effect)[0];
+	/* control input M1, M2, M3 (16)*/
+	output_moments[0] = -krx*mat_data(eR)[0] -kwx*mat_data(eW)[0] + mat_data(inertia_effect)[0];//ignore last term?
 	output_moments[1] = -kry*mat_data(eR)[1] -kwy*mat_data(eW)[1] + mat_data(inertia_effect)[1];
 	output_moments[2] = -krz*mat_data(eR)[2] -kwz*mat_data(eW)[2] + mat_data(inertia_effect)[2];
 }
@@ -472,7 +481,7 @@ void mr_geometry_ctrl_thrust_allocation(float *moment, float total_force)
 	/* quadrotor thrust allocation */
 	float distributed_force = total_force *= 0.25; //split force to 4 motors
 	float motor_force[4];
-	motor_force[0] = -l_div_4 * moment[0] + l_div_4 * moment[1] +
+	motor_force[0] = -l_div_4 * moment[0] + l_div_4 * moment[1] +		//??
 	                 -b_div_4 * moment[2] + distributed_force;
 	motor_force[1] = +l_div_4 * moment[0] + l_div_4 * moment[1] +
 	                 +b_div_4 * moment[2] + distributed_force;
@@ -518,7 +527,7 @@ void rc_mode_handler_geometry_ctrl(radio_t *rc)
 		autopilot_mission_reset();
 		autopilot.wp_now.pos[0] = 0.0f;
 		autopilot.wp_now.pos[1] = 0.0f;
-		autopilot.wp_now.pos[2] = 0.0f;
+		autopilot.wp_now.pos[2] = 0.0f;	//same
 		reset_geometry_tracking_error_integral();
 	}
 
@@ -602,6 +611,8 @@ void multirotor_geometry_control(radio_t *rc, float *desired_heading)
 		/* generate total thrust for quadrotor (open-loop) */
 		control_force = 4.0f * convert_motor_cmd_to_thrust(rc->throttle * 0.01 /* [%] */);
 	}
+
+	Total_thrust = control_force; /* liu */
 
 	if(rc->safety == true) {
 		*desired_heading = attitude_yaw;
