@@ -4,6 +4,7 @@
 #include "imu.h"
 #include "ahrs.h"
 #include "debug_link.h"
+#include "sbus_radio.h"
 
 void geometry_ctrl_init(void);
 void multirotor_geometry_control(radio_t *rc, float *desired_heading);

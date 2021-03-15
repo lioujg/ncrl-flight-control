@@ -4,8 +4,10 @@
 #include "imu.h"
 #include "gpio.h"
 
-#define VINS_MONO_IMU_MSG_SIZE 27
-#define VINS_MONO_CHECKSUM_INIT_VAL 19
+#include "multirotor_geometry_ctrl.h"  /* liu */
+
+#define VINS_MONO_IMU_MSG_SIZE 19
+#define VINS_MONO_CHECKSUM_INIT_VAL 0
 
 static uint8_t generate_vins_mono_checksum_byte(uint8_t *payload, int payload_cnt)
 {
@@ -20,14 +22,17 @@ static uint8_t generate_vins_mono_checksum_byte(uint8_t *payload, int payload_cn
 
 void send_vins_mono_imu_msg(void)
 {
-	/*+------------+----------+---------+---------+---------+--------+--------+--------+----------+
-	 *| start byte | checksum | accel_x | accel_y | accel_z | gyro_x | gyro_y | gyro_z | end byte |
-	 *+------------+----------+---------+---------+---------+--------+--------+--------+----------+*/
+       /*+------------+----------+---------+---------+---------+--------+----------+
+        *| start byte | checksum | thrust  |  gyro_x | gyro_y  | gyro_z | end byte |
+        *+------------+----------+---------+---------+---------+--------+----------+*/
 
-	float accel[3] = {0.0f};
+
+	//float accel[3] = {0.0f};
+	float thrust;   /* liu */
 	float gyro[3] = {0.0f};
 
-	get_accel_lpf(accel);
+	//get_accel_lpf(accel);
+	get_total_thrust(&thrust);      /* liu */
 	get_gyro_lpf(gyro);
 
 	char msg_buf[VINS_MONO_IMU_MSG_SIZE] = {0};
@@ -36,15 +41,11 @@ void send_vins_mono_imu_msg(void)
 	/* reserve 2 for start byte and checksum byte as header */
 	msg_buf[msg_pos] = '@'; //start byte
 	msg_pos += sizeof(uint8_t);
-	msg_buf[msg_pos] = 0;
+	msg_buf[msg_pos] = 0;	//checksum
 	msg_pos += sizeof(uint8_t);
 
 	/* pack payloads */
-	memcpy(msg_buf + msg_pos, &accel[0], sizeof(float));
-	msg_pos += sizeof(float);
-	memcpy(msg_buf + msg_pos, &accel[1], sizeof(float));
-	msg_pos += sizeof(float);
-	memcpy(msg_buf + msg_pos, &accel[2], sizeof(float));
+	memcpy(msg_buf + msg_pos, &thrust, sizeof(float));
 	msg_pos += sizeof(float);
 	memcpy(msg_buf + msg_pos, &gyro[0], sizeof(float));
 	msg_pos += sizeof(float);
@@ -56,7 +57,7 @@ void send_vins_mono_imu_msg(void)
 	msg_buf[msg_pos] = '+'; //end byte
 	msg_pos += sizeof(uint8_t);
 
-	msg_buf[1] = generate_vins_mono_checksum_byte((uint8_t *)&msg_buf[3],
+	msg_buf[1] = generate_vins_mono_checksum_byte((uint8_t *)&msg_buf[3],	//[2]???
 	                VINS_MONO_IMU_MSG_SIZE - 3);
 
 	uart6_puts(msg_buf, VINS_MONO_IMU_MSG_SIZE);
