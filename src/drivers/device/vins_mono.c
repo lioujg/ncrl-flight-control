@@ -57,7 +57,7 @@ void send_vins_mono_imu_msg(void)
 	msg_buf[msg_pos] = '+'; //end byte
 	msg_pos += sizeof(uint8_t);
 
-	msg_buf[1] = generate_vins_mono_checksum_byte((uint8_t *)&msg_buf[3],	//[2]???
+	msg_buf[1] = generate_vins_mono_checksum_byte((uint8_t *)&msg_buf[2],	//[2]???
 	                VINS_MONO_IMU_MSG_SIZE - 3);
 
 	uart6_puts(msg_buf, VINS_MONO_IMU_MSG_SIZE);
